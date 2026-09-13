@@ -1,0 +1,22 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const root = path.resolve(__dirname, '..');
+if (process.platform !== 'linux') throw new Error('Build this release on Linux for its target architecture.');
+for (const task of ['check', 'test']) { const result = spawnSync('npm', ['run', task], { cwd: root, stdio: 'inherit' }); if (result.status !== 0) process.exit(1); }
+const pkg = require('../package.json');
+const out = path.join(root, 'dist', `omadisc-${pkg.version}-linux-${process.arch}`);
+if (fs.existsSync(out)) fs.rmSync(out, { recursive: true });
+fs.mkdirSync(out, { recursive: true });
+const electronDir = path.dirname(require('electron'));
+fs.cpSync(electronDir, out, { recursive: true, dereference: false });
+fs.renameSync(path.join(out,'electron'),path.join(out,'omadisc-bin'));
+require('./native.cjs').buildCompat(out);
+fs.writeFileSync(path.join(out,'omadisc'), '#!/bin/sh\nHERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P) || exit 1\nunset ELECTRON_RUN_AS_NODE\nif [ -f "$HERE/libomadisc-compat.so" ]; then\n  export LD_PRELOAD="$HERE/libomadisc-compat.so${LD_PRELOAD:+:$LD_PRELOAD}"\nfi\nexec "$HERE/omadisc-bin" "$@"\n', {mode:0o755});
+const appDir = path.join(out, 'resources', 'app'); fs.mkdirSync(appDir, { recursive: true });
+for (const dir of ['src']) fs.cpSync(path.join(root,dir),path.join(appDir,dir),{recursive:true});
+fs.writeFileSync(path.join(appDir,'package.json'),JSON.stringify({name:pkg.name,productName:pkg.productName,version:pkg.version,main:pkg.main,license:pkg.license}));
+for(const file of ['README.md','LICENSE']) fs.copyFileSync(path.join(root,file),path.join(out,`OMADISC-${file}`));
+const marker={app:'omadisc',version:pkg.version,arch:process.arch,electron:pkg.devDependencies.electron};
+fs.writeFileSync(path.join(out,'omadisc-release.json'),JSON.stringify(marker,null,2));
+console.log(`Built standalone Linux ${process.arch} app: ${out}`);

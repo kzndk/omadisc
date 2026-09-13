@@ -1,0 +1,11 @@
+node_modules/
+dist/
+test-results/
+*.log
+.env
+.DS_Store
+.env.*
+!.env.example
+/workspace.json
+/Partitions/
+/user-data/

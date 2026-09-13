@@ -1,0 +1,26 @@
+{
+  "name": "omadisc",
+  "productName": "OmaDisc",
+  "version": "0.4.1",
+  "description": "A multi-pane Discord web workspace for Omarchy",
+  "private": true,
+  "main": "src/main.cjs",
+  "license": "MIT",
+  "author": "KZN ApS",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "node scripts/start.cjs",
+    "test": "node scripts/test.cjs unit",
+    "test:e2e": "node scripts/test.cjs e2e",
+    "test:live": "node scripts/test.cjs live",
+    "check": "node scripts/check.cjs",
+    "build": "node scripts/build.cjs",
+    "install:local": "node scripts/install.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "playwright": "1.63.0"
+  }
+}
