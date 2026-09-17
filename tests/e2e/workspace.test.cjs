@@ -41,15 +41,8 @@ test('real Electron shell: independent panes, focus, geometry, drafts, validatio
   for(const v of views) { assert.equal(v.preferences.nodeIntegration,false); assert.equal(v.preferences.sandbox,true); assert.equal(v.preferences.contextIsolation,true); assert.equal(v.preferences.webSecurity,true); assert.ok(!v.preferences.preload); }
   const remote=app.context().pages().find(p=>p.url()===channel(5)); assert.ok(remote);
   await remote.getByLabel('Draft').fill('unsent local fixture draft');
-  const channelOptions=await page.getByLabel('All channels').locator('option').allTextContents();
-  assert.deepEqual(channelOptions,['All channels (6)',...Array.from({length:6},(_,i)=>`${String(i+1).padStart(2,'0')} · Workspace ${i+1}`)]);
   assert.deepEqual(await remote.evaluate(()=>({node:typeof require,bridge:typeof window.omadisc})),{node:'undefined',bridge:'undefined'});
   await page.getByRole('button',{name:'1 pane',exact:true}).click();
-  assert.equal((await nativeViews(app)).filter(v=>v.visible).length,1);
-  await page.getByLabel('All channels').selectOption('5');
-  assert.equal((await state(page)).focus,5);assert.equal((await state(page)).state.count,1);
-  assert.deepEqual((await nativeViews(app)).filter(v=>v.visible).map(v=>v.url),[channel(5)]);
-  await page.getByRole('button',{name:'Back to grid',exact:true}).click();
   assert.equal((await nativeViews(app)).filter(v=>v.visible).length,1);
   await page.getByRole('button',{name:'6 panes',exact:true}).click();
   assert.equal(await remote.getByLabel('Draft').inputValue(),'unsent local fixture draft');

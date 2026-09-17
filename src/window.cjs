@@ -161,7 +161,6 @@ async function createWorkspace(file) {
       switch(action.type) {
         case 'account-sign-in': openAccount();break;
         case 'overlay': if(typeof action.value!=='boolean') throw new Error('Invalid overlay.'); overlay=action.value; break;
-        case 'show-channel': {const i=paneIndex(action.index);if(!state.panes[i].url)throw new Error('That channel is no longer assigned.');focus=i;active=i;break;}
         case 'focus': {const i=paneIndex(action.index);if(i>=state.count)throw new Error('Pane is hidden.');focus=focus===i?null:i;active=i;break;}
         case 'unfocus': focus=null;break;
         case 'reload': {const i=paneIndex(action.index);if(state.panes[i].url)load(i,state.panes[i].url);break;}
