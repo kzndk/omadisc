@@ -257,13 +257,20 @@ test('Omarchy channel design fills the pane, preserves editing and restores Disc
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'omadisc-chat-view-'));
   const initial=defaultState();initial.count=2;initial.panes.forEach(p=>p.url=null);
   fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify(initial));
-  const fixture=fs.readFileSync(path.join(__dirname,'../fixtures/channel.html'),'utf8').replaceAll('__NEXT_CHANNEL__',channel(2));
-  const {app,page}=await launch(dir,{route:route=>route.fulfill({contentType:'text/html',body:route.request().url().endsWith('/login')?'<title>LOCAL LOGIN FIXTURE</title><nav class="sidebar__fixture">Login navigation</nav><input aria-label="Fixture password" type="password">':fixture})});
+  const fixture=fs.readFileSync(path.join(__dirname,'../fixtures/channel.html'),'utf8');
+  const {app,page}=await launch(dir,{route:route=>{
+    const url=route.request().url();
+    const body=url.endsWith('/login')?'<title>LOCAL LOGIN FIXTURE</title><nav class="sidebar__fixture">Login navigation</nav><input aria-label="Fixture password" type="password">':fixture.replaceAll('__CURRENT_CHANNEL__',url).replaceAll('__NEXT_CHANNEL__',channel(2)).replaceAll('__PLANNING_CHANNEL__',channel(4));
+    return route.fulfill({contentType:'text/html',body});
+  }});
   t.after(async()=>{await app.close();fs.rmSync(dir,{recursive:true,force:true});});
   for(let index=0;index<2;index++)await page.evaluate(({index,url})=>window.omadisc.dispatch({type:'assign',index,url,label:'Design studio'}),{index,url:channel(index)});
   await eventually(()=>nativeViews(app),views=>views.length===2&&views.every(v=>v.url.startsWith('https://discord.com/channels/')),'channel fixtures loaded');
   const remote=app.context().pages().find(p=>p.url()===channel(0));
   const peer=app.context().pages().find(p=>p.url()===channel(1));
+  const directory=await eventually(()=>state(page),s=>s.directory?.server==='Morpheus & Team'&&s.directory.channels.length===3,'active server channel directory');
+  assert.deepEqual(directory.directory.channels.map(entry=>entry.label),['kzn','team-lounge','planning']);
+  assert.deepEqual(await page.getByLabel('Server channels').locator('option').allTextContents(),['Morpheus & Team (3)','# kzn','# team-lounge','# planning']);
   const layout=p=>p.evaluate(()=>({
     sidebar:getComputedStyle(document.querySelector('.sidebar__fixture')).display,
     top:getComputedStyle(document.querySelector('.bar__fixture')).display,
@@ -332,8 +339,11 @@ test('Omarchy channel design fills the pane, preserves editing and restores Disc
   await remote.getByRole('link',{name:'Open next channel'}).click();
   await eventually(()=>state(page),s=>s.state.panes[0].url===channel(2)&&!s.browsing.includes(0),'channel selection returns to compact view');
   await eventually(()=>layout(remote),s=>s.sidebar==='none','new channel is compact');
+  await eventually(()=>state(page),s=>s.directory?.channels.some(entry=>entry.url===channel(4)),'server menu refreshes after channel navigation');
+  await page.getByLabel('Server channels').selectOption(channel(4));
+  await eventually(()=>state(page),s=>s.state.panes[0].url===channel(4),'top server menu opens a channel in the active pane');
   await remote.goto('https://discord.com/login').catch(()=>{});
   await eventually(()=>state(page),s=>s.statuses[0]?.waiting,'expired chat uses Settings sign-in');
-  assert.equal((await state(page)).state.panes[0].url,channel(2));
+  assert.equal((await state(page)).state.panes[0].url,channel(4));
   assertContained(app.process().pid);
 });

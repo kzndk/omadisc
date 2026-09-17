@@ -5,10 +5,11 @@ const { channelURL, reduceState, layoutRects, paneIndex, HOME } = require('./mod
 const { REMOTE_PREFERENCES, secureSession, secureRemote } = require('./security.cjs');
 const { watchTheme, resolveTheme, discordCSS } = require('./theme.cjs');
 const { SignIn, isSignInURL } = require('./sign-in.cjs');
+const { guildFromURL, normalizeChannelDirectory, DISCOVERY_SCRIPT } = require('./channel-directory.cjs');
 const SHELL = 'omadisc://app/index.html';
 async function createWorkspace(file) {
   let state = readState(file), focus = null, overlay = false, active = 0, notice = '', closed = false;
-  const views = new Map(), statuses = new Map(), browsing = new Set();
+  const views = new Map(), statuses = new Map(), browsing = new Set(), directories = new Map(), directoryRevisions = new Map();
   const signIn = new SignIn();
   let accountWindow=null, accountError='', accountLoading=false;
   const themeWatcher = watchTheme(()=>applyTheme());
@@ -20,7 +21,8 @@ async function createWorkspace(file) {
   // Use the bundled Chromium identity, not a spoofed Chrome version or a Discord native-client token.
   discord.setUserAgent(discord.getUserAgent().replace(/\s(?:OmaDisc|omadisc)\/\S+/g, '').replace(/\sElectron\/\S+/g, ''));
   function rects() { const [w,h] = win.getContentSize(); return layoutRects(w,h,state.count,focus); }
-  function snapshot() { return { state, focus, overlay, active, notice, browsing:[...browsing], account:{status:signIn.status,open:!!accountWindow,loading:accountLoading,error:accountError}, theme:theme(), dark: nativeTheme.shouldUseDarkColors, rects: rects(), statuses: Object.fromEntries(statuses) }; }
+  function selectedDirectory() { const index=focus??active,value=directories.get(index);return {index,loading:!!value?.loading,server:value?.server||'',channels:value?.channels||[]}; }
+  function snapshot() { return { state, focus, overlay, active, notice, browsing:[...browsing], directory:selectedDirectory(), account:{status:signIn.status,open:!!accountWindow,loading:accountLoading,error:accountError}, theme:theme(), dark: nativeTheme.shouldUseDarkColors, rects: rects(), statuses: Object.fromEntries(statuses) }; }
   function publish() { if (!closed && !win.webContents.isDestroyed()) win.webContents.send('workspace:state', snapshot()); }
   function status(i, value) { statuses.set(i, { ...statuses.get(i), ...value }); publish(); }
   function persist(next) { writeState(file,next); state=next; notice=''; }
@@ -92,6 +94,22 @@ async function createWorkspace(file) {
     catch { notice='Could not save the latest channel. Check available disk space and permissions.'; }
     publish();
   }
+  function refreshDirectory(i) {
+    const view=views.get(i), revision=(directoryRevisions.get(i)||0)+1;directoryRevisions.set(i,revision);
+    if(!view||view.webContents.isDestroyed()||!guildFromURL(view.webContents.getURL())) {directories.delete(i);publish();return;}
+    directories.set(i,{loading:true,server:directories.get(i)?.server||'',channels:directories.get(i)?.channels||[]});publish();
+    const attempt=(number,delay)=>setTimeout(async()=>{
+      if(closed||directoryRevisions.get(i)!==revision||views.get(i)!==view||view.webContents.isDestroyed())return;
+      try {
+        const raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);
+        if(directoryRevisions.get(i)!==revision||view.webContents.isDestroyed())return;
+        const value=normalizeChannelDirectory(view.webContents.getURL(),raw);
+        if(value.channels.length||number===2) {directories.set(i,{...value,loading:false});publish();return;}
+      } catch { if(number===2){directories.set(i,{loading:false,server:'',channels:[]});publish();return;} }
+      attempt(number+1,number===0?350:900);
+    },delay);
+    attempt(0,0);
+  }
   function shortcut(event, input, index) {
     if (input.type !== 'keyDown') return;
     if (input.control && input.alt && ['1','2','4','6'].includes(input.key)) { event.preventDefault(); act({type:'layout',count:Number(input.key)}); }
@@ -120,16 +138,16 @@ async function createWorkspace(file) {
         else styleKey=key;
       } catch { /* A navigation can replace the document during a theme change. */ }
     };
-    wc.on('did-start-navigation',(_event,_url,inPlace,main)=>{if(main&&!inPlace){styleKey=null;styleRevision++;}});
+    wc.on('did-start-navigation',(_event,_url,inPlace,main)=>{if(main){directories.delete(i);directoryRevisions.set(i,(directoryRevisions.get(i)||0)+1);if(!inPlace){styleKey=null;styleRevision++;}}});
     wc.on('dom-ready',()=>void view.applyTheme());
     wc.on('before-input-event',(event,input)=>shortcut(event,input,i));
     wc.on('focus',()=>{active=i;publish();});
     wc.on('did-start-loading',()=>{status(i,{loading:true,error:null});syncGeometry();});
     wc.on('did-stop-loading',()=>status(i,{loading:false}));
-    wc.on('did-finish-load',()=>{wc.setZoomFactor(state.zoom);status(i,{error:null});syncGeometry();});
+    wc.on('did-finish-load',()=>{wc.setZoomFactor(state.zoom);status(i,{error:null});syncGeometry();refreshDirectory(i);});
     wc.on('did-navigate',(_event,url)=>navigation(i,url));
-    wc.on('did-navigate-in-page',(_event,url,main)=>{if(main)navigation(i,url);});
-    wc.on('page-title-updated',(_event,title)=>status(i,{title:title.slice(0,160)}));
+    wc.on('did-navigate-in-page',(_event,url,main)=>{if(main){navigation(i,url);refreshDirectory(i);}});
+    wc.on('page-title-updated',(_event,title)=>{status(i,{title:title.slice(0,160)});refreshDirectory(i);});
     wc.on('did-fail-load',(_e,code,_description,_url,main)=>{if(main&&code!==-3){status(i,{loading:false,error:`Discord could not load (${code}). Check your connection, then reload.`});syncGeometry();}});
     wc.on('render-process-gone',(_event,details)=>{console.error(`OmaDisc pane ${i+1} process exited: ${details.reason} (${details.exitCode})`);status(i,{loading:false,error:`This pane stopped responding (${details.reason}). Reload to reconnect.`});syncGeometry();});
     wc.on('context-menu',(_e,params)=>{const items=params.isEditable?[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]:[{role:'copy',enabled:!!params.selectionText},{role:'selectAll'}];Menu.buildFromTemplate(items).popup({window:win});});
@@ -178,7 +196,7 @@ async function createWorkspace(file) {
             if(previous.panes[action.index].url!==state.panes[action.index].url)load(action.index,state.panes[action.index].url);
             else void views.get(action.index)?.applyTheme?.();
           }
-          if(action.type==='clear') {browsing.delete(action.index);signIn.remove(action.index);const v=views.get(action.index);if(v){win.contentView.removeChildView(v);v.webContents.close();views.delete(action.index);}statuses.delete(action.index);}
+          if(action.type==='clear') {browsing.delete(action.index);directories.delete(action.index);directoryRevisions.set(action.index,(directoryRevisions.get(action.index)||0)+1);signIn.remove(action.index);const v=views.get(action.index);if(v){win.contentView.removeChildView(v);v.webContents.close();views.delete(action.index);}statuses.delete(action.index);}
           if(action.type==='zoom')for(const v of views.values())v.webContents.setZoomFactor(state.zoom);
           if(action.type==='appearance'||action.type==='theme-discord')applyTheme();
         }

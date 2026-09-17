@@ -1,6 +1,7 @@
 const api = window.omadisc;
 const $ = selector => document.querySelector(selector);
 let current, editing = 0;
+let channelMenuSignature = '';
 const channelDialog = $('#channel-dialog'), helpDialog = $('#help-dialog'), settingsDialog = $('#settings-dialog');
 const dialogs = [channelDialog, helpDialog, settingsDialog];
 const paneElements = Array.from({ length: 6 }, (_, i) => {
@@ -35,6 +36,15 @@ function render(data) {
   $('#theme-discord').checked=state.themeDiscord;
   document.querySelectorAll('[data-layout]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.layout) === state.count)));
   $('#appearance').value = state.appearance; $('#zoom').value = String(state.zoom);
+  const directory=data.directory||{index:active,loading:false,server:'',channels:[]};
+  const menuSignature=JSON.stringify(directory);
+  if(menuSignature!==channelMenuSignature) {
+    const placeholder=document.createElement('option');placeholder.value='';
+    placeholder.textContent=directory.loading&&!directory.channels.length?'Loading channels…':directory.server?`${directory.server} (${directory.channels.length})`:'Server channels';
+    const options=directory.channels.map(channel=>{const option=document.createElement('option');option.value=channel.url;option.textContent=`# ${channel.label}`;return option;});
+    $('#channels').replaceChildren(placeholder,...options);channelMenuSignature=menuSignature;
+  }
+  $('#channels').disabled=!directory.channels.length;$('#channels').value='';
   $('#unfocus').hidden = focus === null;
   $('#summary').textContent = data.account.status === 'required' ? 'Sign in through Settings · One account for all panes' : `${focus === null ? `${state.count} ${state.count === 1 ? 'pane' : 'panes'}` : `Pane ${focus + 1} · focused`} · ${data.theme.name}`;
   const account=data.account;
@@ -96,6 +106,10 @@ $('#account-sign-in').addEventListener('click',()=>void dispatch({type:'account-
 $('#help').addEventListener('click', async () => { if ((await dispatch({ type: 'overlay', value: true })).ok) helpDialog.showModal(); });
 $('#help-close').addEventListener('click', () => helpDialog.close());
 $('#unfocus').addEventListener('click', () => void dispatch({ type: 'unfocus' }));
+$('#channels').addEventListener('change', event => {
+  const url=event.target.value;event.target.value='';
+  if(url&&current)void dispatch({type:'assign',index:current.directory.index,url,label:current.state.panes[current.directory.index].label});
+});
 document.querySelectorAll('[data-layout]').forEach(b => b.addEventListener('click', () => void dispatch({ type: 'layout', count: Number(b.dataset.layout) })));
 $('#appearance').addEventListener('change', e => void dispatch({ type: 'appearance', value: e.target.value }));
 $('#theme-discord').addEventListener('change', e => void dispatch({ type: 'theme-discord', value: e.target.checked }));
