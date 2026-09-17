@@ -25,3 +25,5 @@ Version 0.3.0 adds an Omarchy channel layout over Discord's message list/editor:
 Version 0.4.0 moves sign-in to **Settings → Discord account**. A single sandboxed account window shares the existing persistent Discord partition with every channel. Waiting panes reconnect after sign-in; active drafts and the selected layout remain intact. Cancellation, retry, session expiry and persisted fixture storage are covered by integration tests. See [0.4.0 verification](../verification-0.4.0.md).
 
 Version 0.4.1 fixes channel-only panes for Discord's nested content subgrid, preserving named grid lines and service notices while hiding server/channel navigation, account controls, duplicate headers and members. Choosing a channel through + also exits navigation. The fixture now models the nested layout and checks full-width messages, composer bounds, navigation restoration and retained drafts. See [0.4.1 verification](../verification-0.4.1.md).
+
+Version 0.5.0 adds an All channels dropdown to the top toolbar. It lists every saved pane assignment and temporarily focuses a selection even when that pane is hidden by the current layout; Back to grid restores the prior layout.
