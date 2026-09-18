@@ -2,9 +2,7 @@
 
 A multi-pane Discord web workspace for **Omarchy / Linux**. Choose **1, 2, 4 or 6** channels in one window. Normal Discord sign-in; messages remain authored by you.
 
-![OmaDisc channel view with local example messages](docs/images/channel-preview.png)
-
-*Preview uses local test fixtures.*
+![OmaDisc four-pane Discord workspace](docs/images/channel-preview.png)
 
 ## Use
 
