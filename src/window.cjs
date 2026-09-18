@@ -102,8 +102,8 @@ async function createWorkspace(file) {
       if(closed||directoryRevisions.get(i)!==revision||views.get(i)!==view||view.webContents.isDestroyed())return;
       const scanNavigation=state.themeDiscord&&!browsing.has(i);let raw;
       try {
-        if(scanNavigation){view.directoryScanRevision=revision;view.directoryScan=true;syncGeometry();await view.applyTheme?.();}
         raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);
+        if(scanNavigation&&raw?.channels?.length){view.directoryScanRevision=revision;view.directoryScan=true;syncGeometry();await view.applyTheme?.();raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);}
         if(directoryRevisions.get(i)!==revision||view.webContents.isDestroyed())return;
         const value=normalizeChannelDirectory(view.webContents.getURL(),raw);
         if(value.channels.length||number===2) {directories.set(i,{...value,loading:false});publish();return;}
