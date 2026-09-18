@@ -96,16 +96,19 @@ async function createWorkspace(file) {
   }
   function refreshDirectory(i) {
     const view=views.get(i), revision=(directoryRevisions.get(i)||0)+1;directoryRevisions.set(i,revision);
-    if(!view||view.webContents.isDestroyed()||!guildFromURL(view.webContents.getURL())) {directories.delete(i);publish();return;}
+    if(!view||view.webContents.isDestroyed()||!guildFromURL(view.webContents.getURL())) {if(view)view.directoryScan=false;directories.delete(i);syncGeometry();publish();return;}
     directories.set(i,{loading:true,server:directories.get(i)?.server||'',channels:directories.get(i)?.channels||[]});publish();
     const attempt=(number,delay)=>setTimeout(async()=>{
       if(closed||directoryRevisions.get(i)!==revision||views.get(i)!==view||view.webContents.isDestroyed())return;
+      const scanNavigation=state.themeDiscord&&!browsing.has(i);let raw;
       try {
-        const raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);
+        if(scanNavigation){view.directoryScanRevision=revision;view.directoryScan=true;syncGeometry();await view.applyTheme?.();}
+        raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);
         if(directoryRevisions.get(i)!==revision||view.webContents.isDestroyed())return;
         const value=normalizeChannelDirectory(view.webContents.getURL(),raw);
         if(value.channels.length||number===2) {directories.set(i,{...value,loading:false});publish();return;}
       } catch { if(number===2){directories.set(i,{loading:false,server:'',channels:[]});publish();return;} }
+      finally {if(scanNavigation&&view.directoryScanRevision===revision){view.directoryScan=false;await view.applyTheme?.();syncGeometry();}}
       attempt(number+1,number===0?350:900);
     },delay);
     attempt(0,0);
@@ -121,6 +124,7 @@ async function createWorkspace(file) {
   }
   function createPane(i) {
     const view = new WebContentsView({ webPreferences: { ...REMOTE_PREFERENCES, session: discord } });
+    view.directoryScan=false;
     views.set(i,view); win.contentView.addChildView(view); view.setBackgroundColor('#202127');
     const wc=view.webContents; secureRemote(wc,win);
     let styleKey=null,styleRevision=0;
@@ -133,12 +137,12 @@ async function createWorkspace(file) {
       try {
         // Electron 44 does not remove user-origin sheets reliably. Author-origin
         // !important rules keep the theme removable without reloading drafts.
-        const key=await wc.insertCSS(discordCSS(theme(),{navigation:browsing.has(i)}),{cssOrigin:'author'});
+        const key=await wc.insertCSS(discordCSS(theme(),{navigation:browsing.has(i)||view.directoryScan}),{cssOrigin:'author'});
         if(revision!==styleRevision||wc.isDestroyed()) { if(!wc.isDestroyed())await wc.removeInsertedCSS(key).catch(()=>{}); }
         else styleKey=key;
       } catch { /* A navigation can replace the document during a theme change. */ }
     };
-    wc.on('did-start-navigation',(_event,_url,inPlace,main)=>{if(main){directories.delete(i);directoryRevisions.set(i,(directoryRevisions.get(i)||0)+1);if(!inPlace){styleKey=null;styleRevision++;}}});
+    wc.on('did-start-navigation',(_event,_url,inPlace,main)=>{if(main){view.directoryScan=false;directories.delete(i);directoryRevisions.set(i,(directoryRevisions.get(i)||0)+1);if(!inPlace){styleKey=null;styleRevision++;}}});
     wc.on('dom-ready',()=>void view.applyTheme());
     wc.on('before-input-event',(event,input)=>shortcut(event,input,i));
     wc.on('focus',()=>{active=i;publish();});
@@ -147,7 +151,7 @@ async function createWorkspace(file) {
     wc.on('did-finish-load',()=>{wc.setZoomFactor(state.zoom);status(i,{error:null});syncGeometry();refreshDirectory(i);});
     wc.on('did-navigate',(_event,url)=>navigation(i,url));
     wc.on('did-navigate-in-page',(_event,url,main)=>{if(main){navigation(i,url);refreshDirectory(i);}});
-    wc.on('page-title-updated',(_event,title)=>{status(i,{title:title.slice(0,160)});refreshDirectory(i);});
+    wc.on('page-title-updated',(_event,title)=>status(i,{title:title.slice(0,160)}));
     wc.on('did-fail-load',(_e,code,_description,_url,main)=>{if(main&&code!==-3){status(i,{loading:false,error:`Discord could not load (${code}). Check your connection, then reload.`});syncGeometry();}});
     wc.on('render-process-gone',(_event,details)=>{console.error(`OmaDisc pane ${i+1} process exited: ${details.reason} (${details.exitCode})`);status(i,{loading:false,error:`This pane stopped responding (${details.reason}). Reload to reconnect.`});syncGeometry();});
     wc.on('context-menu',(_e,params)=>{const items=params.isEditable?[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]:[{role:'copy',enabled:!!params.selectionText},{role:'selectAll'}];Menu.buildFromTemplate(items).popup({window:win});});
@@ -162,7 +166,7 @@ async function createWorkspace(file) {
   function syncGeometry() {
     if (closed) return;
     const visible = new Map(rects().map(r=>[r.index,r]));
-    for(const [i,v] of views) { const r=visible.get(i); if(r)v.setBounds(r.content); const shown=!!r&&!overlay&&!statuses.get(i)?.error&&!statuses.get(i)?.waiting;v.setVisible(shown);v.webContents.setAudioMuted(!shown); }
+    for(const [i,v] of views) { const r=visible.get(i); if(r)v.setBounds(r.content); const shown=!!r&&!overlay&&!v.directoryScan&&!statuses.get(i)?.error&&!statuses.get(i)?.waiting;v.setVisible(shown);v.webContents.setAudioMuted(!shown); }
   }
   function sync() {
     if(closed)return;

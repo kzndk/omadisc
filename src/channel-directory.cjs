@@ -28,25 +28,78 @@ function normalizeChannelDirectory(currentURL, raw) {
 // This fixed, read-only DOM query runs in Discord's page after navigation. It
 // reads the links Discord already rendered; it does not access tokens, stores,
 // private APIs, or modify the remote document.
-function discoverChannelDirectory() {
+async function discoverChannelDirectory() {
   const parts = location.pathname.split('/').filter(Boolean);
   const guild = parts[0] === 'channels' && /^[1-9][0-9]{16,19}$/.test(parts[1] || '') ? parts[1] : null;
   if (!guild) return { guild: null, server: '', channels: [] };
   const clean = value => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
   const guildNode = document.querySelector(`[data-list-item-id="guildsnav___${guild}"]`);
-  const server = clean(guildNode?.getAttribute('aria-label') || guildNode?.textContent || document.querySelector('[data-server-name]')?.getAttribute('data-server-name'));
-  let links = [...document.querySelectorAll('[data-list-item-id^="channels___"][href], [data-list-item-id^="channels___"] a[href]')];
-  if (!links.length) links = [...document.querySelectorAll('nav a[href^="/channels/"], nav a[href^="https://discord.com/channels/"]')];
-  const channels = links.map(link => {
-    let url;
-    try { url = new URL(link.href, location.origin); } catch { return null; }
-    const match = url.pathname.match(/^\/channels\/([1-9][0-9]{16,19})\/([1-9][0-9]{16,19})$/);
-    if (!match || match[1] !== guild || url.search || url.hash) return null;
-    const name = link.querySelector('[class*="name"]');
-    const label = clean(name?.textContent || link.textContent || link.getAttribute('aria-label'));
-    return { url: url.href, label };
-  }).filter(Boolean);
-  return { guild, server, channels };
+  const guildLabel = guildNode?.matches('[aria-label]') ? guildNode : guildNode?.querySelector('[aria-label]');
+  const server = clean(guildLabel?.getAttribute('aria-label') || guildNode?.textContent || document.querySelector('[data-server-name]')?.getAttribute('data-server-name'));
+  const initial = [...document.querySelectorAll('[data-list-item-id^="channels___"][href], [data-list-item-id^="channels___"] a[href]')];
+  const root = initial[0]?.closest('nav') || [...document.querySelectorAll('nav')].find(nav => [...nav.querySelectorAll('a[href]')].some(link => {
+    try { return new URL(link.href,location.origin).pathname.startsWith(`/channels/${guild}/`); } catch { return false; }
+  }));
+  if (!root) return { guild, server, channels: [] };
+  const pause = delay => new Promise(resolve => setTimeout(resolve,delay));
+  const found = new Map();
+  function collect() {
+    const links = [...root.querySelectorAll('[data-list-item-id^="channels___"][href], [data-list-item-id^="channels___"] a[href], a[href^="/channels/"], a[href^="https://discord.com/channels/"]')];
+    for (const link of links) {
+      let url;
+      try { url = new URL(link.href,location.origin); } catch { continue; }
+      const match = url.pathname.match(/^\/channels\/([1-9][0-9]{16,19})\/([1-9][0-9]{16,19})$/);
+      if (!match || match[1] !== guild || url.search || url.hash || found.has(url.href)) continue;
+      const name = link.querySelector('[class*="name"]');
+      found.set(url.href,{url:url.href,label:clean(name?.textContent || link.textContent || link.getAttribute('aria-label'))});
+    }
+  }
+  const categoryKey = element => clean(element.getAttribute('data-list-item-id') || element.getAttribute('aria-controls') || element.getAttribute('aria-label') || element.textContent);
+  const expanded = new Set();
+  function expandVisible() {
+    let changed=false;
+    for(const element of root.querySelectorAll('[aria-expanded="false"]')) {
+      const key=categoryKey(element);
+      if(!key||expanded.has(key))continue;
+      expanded.add(key);element.click();changed=true;
+    }
+    return changed;
+  }
+  function restoreVisible() {
+    let changed=false;
+    for(const element of root.querySelectorAll('[aria-expanded="true"]')) {
+      const key=categoryKey(element);
+      if(!expanded.has(key))continue;
+      expanded.delete(key);element.click();changed=true;
+    }
+    return changed;
+  }
+  const candidates=[root,...root.querySelectorAll('*')];
+  for(let element=root.parentElement,depth=0;element&&depth<4;element=element.parentElement,depth++)candidates.push(element);
+  const scroller=candidates.filter(element=>element.scrollHeight>element.clientHeight+2).sort((a,b)=>(b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight))[0]||null;
+  const originalScroll=scroller?.scrollTop||0;
+  async function scan(action) {
+    if(!scroller) {
+      const changed=action();if(changed)await pause(40);collect();return;
+    }
+    let top=0;
+    for(let pass=0;pass<80;pass++) {
+      scroller.scrollTop=top;await pause(30);
+      const changed=action();if(changed)await pause(45);
+      collect();
+      const end=Math.max(0,scroller.scrollHeight-scroller.clientHeight);
+      if(top>=end-1)break;
+      const next=Math.min(end,top+Math.max(120,Math.floor(scroller.clientHeight*.75)));
+      if(next===top)break;top=next;
+    }
+  }
+  try {
+    await scan(expandVisible);collect();
+  } finally {
+    for(let pass=0;pass<3&&expanded.size;pass++)await scan(restoreVisible);
+    if(scroller){scroller.scrollTop=Math.min(originalScroll,Math.max(0,scroller.scrollHeight-scroller.clientHeight));await pause(30);}
+  }
+  return { guild, server, channels: [...found.values()] };
 }
 
 const DISCOVERY_SCRIPT = `(${discoverChannelDirectory.toString()})()`;

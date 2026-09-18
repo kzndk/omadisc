@@ -12,7 +12,7 @@ ol{margin:0;padding:0;list-style:none}.message_fixture{position:relative;padding
 <div class="base__fixture">
   <div class="bar__fixture">Discord navigation fixture</div>
   <div class="app-content__fixture">
-  <aside class="sidebar__fixture"><nav class="guilds__fixture" aria-label="Fixture servers"><a href="/channels/@me">Home</a><span data-list-item-id="guildsnav___123456789012345678" aria-label="Morpheus &amp; Team">◎</span></nav><div class="sidebarList__fixture"><strong>Workspace</strong><nav aria-label="Morpheus &amp; Team channels"><a data-list-item-id="channels___current" href="__CURRENT_CHANNEL__"><span class="name_fixture">kzn</span></a><a data-list-item-id="channels___next" aria-label="Open next channel" href="__NEXT_CHANNEL__"><span class="name_fixture">team-lounge</span></a><a data-list-item-id="channels___planning" href="__PLANNING_CHANNEL__"><span class="name_fixture">planning</span></a></nav></div><section class="panels__fixture">Fixture account controls</section></aside>
+  <aside class="sidebar__fixture"><nav class="guilds__fixture" aria-label="Fixture servers"><a href="/channels/@me">Home</a><span data-list-item-id="guildsnav___123456789012345678" aria-label="Morpheus &amp; Team">◎</span></nav><div class="sidebarList__fixture"><strong>Workspace</strong><nav aria-label="Morpheus &amp; Team channels"><a data-list-item-id="channels___current" href="__CURRENT_CHANNEL__"><span class="name_fixture">kzn</span></a><a data-list-item-id="channels___next" aria-label="Open next channel" href="__NEXT_CHANNEL__"><span class="name_fixture">team-lounge</span></a><a data-list-item-id="channels___planning" href="__PLANNING_CHANNEL__"><span class="name_fixture">planning</span></a><button id="archive-category" data-list-item-id="category___archive" aria-expanded="false">Archive</button><span id="archive-channels" data-channel="__ARCHIVE_CHANNEL__"></span></nav></div><section class="panels__fixture">Fixture account controls</section></aside>
   <div class="notice__fixture" hidden>Fixture connection notice</div>
   <main class="page__fixture"><div class="chat_fixture">
     <section class="title_fixture"><h1># design-studio</h1><span>CHANNEL PREVIEW</span></section>
@@ -28,5 +28,12 @@ ol{margin:0;padding:0;list-style:none}.message_fixture{position:relative;padding
   </div></main>
   </div>
 </div>
-<script>document.querySelector('.reaction_fixture').onclick=function(){this.querySelector('span').textContent=Number(this.querySelector('span').textContent)+1}</script>
+<script>
+document.querySelector('.reaction_fixture').onclick=function(){this.querySelector('span').textContent=Number(this.querySelector('span').textContent)+1};
+document.querySelector('#archive-category').onclick=function(){
+  const open=this.getAttribute('aria-expanded')==='false';this.setAttribute('aria-expanded',String(open));
+  const channels=document.querySelector('#archive-channels');channels.replaceChildren();
+  if(open){const link=document.createElement('a');link.href=channels.dataset.channel;link.dataset.listItemId='channels___archive';link.innerHTML='<span class="name_fixture">archive</span>';channels.append(link);}
+};
+</script>
 </body></html>

@@ -260,7 +260,7 @@ test('Omarchy channel design fills the pane, preserves editing and restores Disc
   const fixture=fs.readFileSync(path.join(__dirname,'../fixtures/channel.html'),'utf8');
   const {app,page}=await launch(dir,{route:route=>{
     const url=route.request().url();
-    const body=url.endsWith('/login')?'<title>LOCAL LOGIN FIXTURE</title><nav class="sidebar__fixture">Login navigation</nav><input aria-label="Fixture password" type="password">':fixture.replaceAll('__CURRENT_CHANNEL__',url).replaceAll('__NEXT_CHANNEL__',channel(2)).replaceAll('__PLANNING_CHANNEL__',channel(4));
+    const body=url.endsWith('/login')?'<title>LOCAL LOGIN FIXTURE</title><nav class="sidebar__fixture">Login navigation</nav><input aria-label="Fixture password" type="password">':fixture.replaceAll('__CURRENT_CHANNEL__',url).replaceAll('__NEXT_CHANNEL__',channel(2)).replaceAll('__PLANNING_CHANNEL__',channel(4)).replaceAll('__ARCHIVE_CHANNEL__',channel(5));
     return route.fulfill({contentType:'text/html',body});
   }});
   t.after(async()=>{await app.close();fs.rmSync(dir,{recursive:true,force:true});});
@@ -268,9 +268,10 @@ test('Omarchy channel design fills the pane, preserves editing and restores Disc
   await eventually(()=>nativeViews(app),views=>views.length===2&&views.every(v=>v.url.startsWith('https://discord.com/channels/')),'channel fixtures loaded');
   const remote=app.context().pages().find(p=>p.url()===channel(0));
   const peer=app.context().pages().find(p=>p.url()===channel(1));
-  const directory=await eventually(()=>state(page),s=>s.directory?.server==='Morpheus & Team'&&s.directory.channels.length===3,'active server channel directory');
-  assert.deepEqual(directory.directory.channels.map(entry=>entry.label),['kzn','team-lounge','planning']);
-  assert.deepEqual(await page.getByLabel('Server channels').locator('option').allTextContents(),['Morpheus & Team (3)','# kzn','# team-lounge','# planning']);
+  const directory=await eventually(()=>state(page),s=>s.directory?.server==='Morpheus & Team'&&s.directory.channels.length===4,'complete active server channel directory');
+  assert.deepEqual(directory.directory.channels.map(entry=>entry.label),['kzn','team-lounge','planning','archive']);
+  assert.deepEqual(await page.getByLabel('Server channels').locator('option').allTextContents(),['Morpheus & Team (4)','# kzn','# team-lounge','# planning','# archive']);
+  assert.equal(await remote.locator('#archive-category').getAttribute('aria-expanded'),'false','collapsed categories restore after discovery');
   const layout=p=>p.evaluate(()=>({
     sidebar:getComputedStyle(document.querySelector('.sidebar__fixture')).display,
     top:getComputedStyle(document.querySelector('.bar__fixture')).display,
