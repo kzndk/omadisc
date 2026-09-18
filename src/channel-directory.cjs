@@ -25,11 +25,9 @@ function normalizeChannelDirectory(currentURL, raw) {
   return { server: cleanLabel(raw.server), channels };
 }
 
-function channelBrowserURL(currentURL,raw) {
+function channelBrowserURL(currentURL) {
   const guild=guildFromURL(currentURL);
-  if(!guild||typeof raw?.browserURL!=='string')return null;
-  const expected=`https://discord.com/channels/${guild}/channel-browser`;
-  return raw.browserURL===expected?expected:null;
+  return guild?`https://discord.com/channels/${guild}/channel-browser`:null;
 }
 
 // This fixed, read-only DOM query runs in Discord's page after navigation. It
@@ -39,9 +37,6 @@ async function discoverChannelDirectory() {
   const parts = location.pathname.split('/').filter(Boolean);
   const guild = parts[0] === 'channels' && /^[1-9][0-9]{16,19}$/.test(parts[1] || '') ? parts[1] : null;
   if (!guild) return { guild: null, server: '', channels: [] };
-  const expectedBrowserPath=`/channels/${guild}/channel-browser`;
-  const browserLink=[...document.querySelectorAll('a[href]')].find(link=>{try{const url=new URL(link.href,location.origin);return url.origin===location.origin&&url.pathname===expectedBrowserPath&&!url.search&&!url.hash;}catch{return false;}});
-  const browserURL=browserLink?new URL(browserLink.href,location.origin).href:'';
   const clean = value => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 160) : '';
   const guildNode = document.querySelector(`[data-list-item-id="guildsnav___${guild}"]`);
   const guildLabel = guildNode?.matches('[aria-label]') ? guildNode : guildNode?.querySelector('[aria-label]');
@@ -51,7 +46,7 @@ async function discoverChannelDirectory() {
   const root = parts[2]==='channel-browser'?document:sidebar||initial[0]?.closest('[role="tree"], [role="list"], nav') || [...document.querySelectorAll('nav')].find(nav => [...nav.querySelectorAll('a[href]')].some(link => {
     try { return new URL(link.href,location.origin).pathname.startsWith(`/channels/${guild}/`); } catch { return false; }
   }));
-  if (!root) return { guild, server, browserURL, channels: [] };
+  if (!root) return { guild, server, channels: [] };
   const pause = delay => new Promise(resolve => setTimeout(resolve,delay));
   const found = new Map();
   function collect() {
@@ -98,9 +93,12 @@ async function discoverChannelDirectory() {
   }
   const candidates=[root,...root.querySelectorAll('*')];
   for(let element=root.parentElement,depth=0;element&&depth<4;element=element.parentElement,depth++)candidates.push(element);
-  const scroller=candidates.filter(element=>element.scrollHeight>element.clientHeight+2).sort((a,b)=>(b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight))[0]||null;
-  const originalScroll=scroller?.scrollTop||0;
-  async function scan(action) {
+  // Discord virtualizes both the normal sidebar and its channel-browser list.
+  // Scan every substantial scroll container instead of guessing that the one
+  // with the largest overflow is the directory we want.
+  const scrollers=[...new Set(candidates)].filter(element=>Number.isFinite(element?.scrollTop)&&element.scrollHeight>element.clientHeight+2).sort((a,b)=>(b.scrollHeight-b.clientHeight)-(a.scrollHeight-a.clientHeight)).slice(0,6);
+  const originalScroll=new Map(scrollers.map(element=>[element,element.scrollTop]));
+  async function scan(scroller,action) {
     if(!scroller) {
       const changed=action();if(changed)await pause(40);collect();return;
     }
@@ -116,12 +114,18 @@ async function discoverChannelDirectory() {
     }
   }
   try {
-    await scan(expandVisible);collect();
+    if(scrollers.length)for(const scroller of scrollers)await scan(scroller,expandVisible);
+    else await scan(null,expandVisible);
+    collect();
   } finally {
-    for(let pass=0;pass<3&&expanded.size;pass++)await scan(restoreVisible);
-    if(scroller){scroller.scrollTop=Math.min(originalScroll,Math.max(0,scroller.scrollHeight-scroller.clientHeight));await pause(30);}
+    for(let pass=0;pass<3&&expanded.size;pass++) {
+      if(scrollers.length)for(const scroller of scrollers)await scan(scroller,restoreVisible);
+      else await scan(null,restoreVisible);
+    }
+    for(const scroller of scrollers)scroller.scrollTop=Math.min(originalScroll.get(scroller),Math.max(0,scroller.scrollHeight-scroller.clientHeight));
+    if(scrollers.length)await pause(30);
   }
-  return { guild, server, browserURL, channels: [...found.values()] };
+  return { guild, server, channels: [...found.values()] };
 }
 
 const DISCOVERY_SCRIPT = `(${discoverChannelDirectory.toString()})()`;

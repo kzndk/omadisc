@@ -30,6 +30,6 @@ test('channel directories are unavailable for home, DMs and mismatched data',()=
   assert.equal(guildFromURL('https://discord.com/channels/@me/234567890123456789'),null);
   assert.deepEqual(normalizeChannelDirectory('https://discord.com/channels/@me',{guild,channels:[]}),{server:'',channels:[]});
   assert.deepEqual(normalizeChannelDirectory(channel('234567890123456789'),{guild:'999999999999999999',channels:[]}),{server:'',channels:[]});
-  assert.equal(channelBrowserURL(channel('234567890123456789'),{browserURL:`https://discord.com/channels/${guild}/channel-browser`}),`https://discord.com/channels/${guild}/channel-browser`);
-  for(const browserURL of [`https://discord.com/channels/999999999999999999/channel-browser`,`https://discord.com/channels/${guild}/channel-browser?token=no`,'https://example.com/'])assert.equal(channelBrowserURL(channel('234567890123456789'),{browserURL}),null);
+  assert.equal(channelBrowserURL(channel('234567890123456789')),`https://discord.com/channels/${guild}/channel-browser`);
+  assert.equal(channelBrowserURL('https://discord.com/channels/@me'),null);
 });

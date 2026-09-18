@@ -104,27 +104,38 @@ async function createWorkspace(file) {
     publish();
   }
   async function scanChannelBrowser(url,i,revision) {
-    if(!url||closed)return null;
+    if(!url||closed||signIn.status==='required'||signIn.open)return null;
     const browser=new WebContentsView({webPreferences:{...REMOTE_PREFERENCES,session:discord,backgroundThrottling:false}}),wc=browser.webContents;
+    browser.directoryDiscovery=true;
     win.contentView.addChildView(browser);browser.setBounds({x:-2000,y:-2000,width:1000,height:800});browser.setVisible(true);secureRemote(wc,win);
+    const found=new Map();let latest=null;
     try {
       await wc.loadURL(url);
-      for(const delay of [150,400,900]) {
+      if(signIn.status==='required'||signIn.open)return null;
+      const expected=new URL(url),loaded=new URL(wc.getURL());
+      if(loaded.origin!==expected.origin||loaded.pathname!==expected.pathname)return null;
+      // The channel browser initially renders the familiar sidebar before its
+      // complete directory. Preserve every result and keep waiting instead of
+      // mistaking that first partial render for the finished server scan.
+      for(const delay of [200,500,1000]) {
         await new Promise(resolve=>setTimeout(resolve,delay));
-        if(closed||directoryRevisions.get(i)!==revision||wc.isDestroyed())return null;
+        if(closed||signIn.status==='required'||signIn.open||directoryRevisions.get(i)!==revision||wc.isDestroyed())return null;
         const raw=await wc.executeJavaScript(DISCOVERY_SCRIPT);
-        if(raw?.channels?.length)return raw;
+        if(raw&&Array.isArray(raw.channels)) {
+          latest=raw;
+          for(const channel of raw.channels)if(channel?.url)found.set(channel.url,channel);
+        }
       }
     } catch { return null; }
     finally {
       try {if(!closed)win.contentView.removeChildView(browser);}catch{}
       if(!wc.isDestroyed())wc.close();
     }
-    return null;
+    return latest?{...latest,channels:[...found.values()]}:null;
   }
   function refreshDirectory(i) {
     const view=views.get(i), revision=(directoryRevisions.get(i)||0)+1;directoryRevisions.set(i,revision);
-    if(!view||view.webContents.isDestroyed()||!guildFromURL(view.webContents.getURL())) {if(view)view.directoryScan=false;directories.delete(i);syncGeometry();publish();return;}
+    if(signIn.status==='required'||signIn.open||!view||view.webContents.isDestroyed()||!guildFromURL(view.webContents.getURL())) {if(view)view.directoryScan=false;directories.delete(i);syncGeometry();publish();return;}
     directories.set(i,{loading:true,server:directories.get(i)?.server||'',channels:directories.get(i)?.channels||[]});publish();
     const attempt=(number,delay)=>setTimeout(async()=>{
       if(closed||directoryRevisions.get(i)!==revision||views.get(i)!==view||view.webContents.isDestroyed())return;
@@ -133,7 +144,7 @@ async function createWorkspace(file) {
         raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);
         if(scanNavigation&&raw?.channels?.length){view.directoryScanRevision=revision;view.directoryScan=true;syncGeometry();await view.applyTheme?.();raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);}
         if(directoryRevisions.get(i)!==revision||view.webContents.isDestroyed())return;
-        const browserURL=channelBrowserURL(view.webContents.getURL(),raw),browserRaw=await scanChannelBrowser(browserURL,i,revision);
+        const browserURL=channelBrowserURL(view.webContents.getURL()),browserRaw=await scanChannelBrowser(browserURL,i,revision);
         if(browserRaw)raw={guild:raw.guild,server:raw.server||browserRaw.server,channels:[...raw.channels,...browserRaw.channels]};
         if(directoryRevisions.get(i)!==revision||view.webContents.isDestroyed())return;
         const value=normalizeChannelDirectory(view.webContents.getURL(),raw);

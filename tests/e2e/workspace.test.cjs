@@ -21,7 +21,7 @@ async function launch(dir, options={}) {
   return { app, page };
 }
 async function state(page) { return page.evaluate(() => window.omadisc.getState()); }
-async function nativeViews(app) { return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.filter(v => v.webContents && v.webContents.getURL().startsWith('https://discord.com')).map(v => ({ id: v.webContents.id, url: v.webContents.getURL(), bounds: v.getBounds(), visible: v.getVisible(), preferences: v.webContents.getLastWebPreferences() }))); }
+async function nativeViews(app) { return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.filter(v => !v.directoryDiscovery && v.webContents && v.webContents.getURL().startsWith('https://discord.com')).map(v => ({ id: v.webContents.id, url: v.webContents.getURL(), bounds: v.getBounds(), visible: v.getVisible(), preferences: v.webContents.getLastWebPreferences() }))); }
 async function eventually(fn, predicate, message) { const end = Date.now() + 15000; let v; do { v=await fn(); if(predicate(v)) return v; await new Promise(r=>setTimeout(r,80)); } while(Date.now()<end); assert.fail(message + ': ' + JSON.stringify(v)); }
 
 test('real Electron shell: independent panes, focus, geometry, drafts, validation, security and persistence', { timeout: 120000 }, async t => {
@@ -69,7 +69,7 @@ test('real Electron shell: independent panes, focus, geometry, drafts, validatio
   await eventually(async()=>({snap:await state(page),native:await nativeViews(app)}),({snap,native})=>snap.rects.every(rect=>JSON.stringify(native.find(v=>v.url===snap.state.panes[rect.index].url)?.bounds)===JSON.stringify(rect.content)),'native panes follow compositor resize');
   await remote.evaluate(()=>{ window.open('file:///etc/passwd'); });
   assert.equal((await nativeViews(app)).length,6);
-  const sessions=await app.evaluate(({BrowserWindow})=>{const views=BrowserWindow.getAllWindows()[0].contentView.children.filter(v=>v.webContents?.getURL().startsWith('https://discord.com')); return views.every(v=>v.webContents.session===views[0].webContents.session);}); assert.equal(sessions,true);
+  const sessions=await app.evaluate(({BrowserWindow})=>{const views=BrowserWindow.getAllWindows()[0].contentView.children.filter(v=>!v.directoryDiscovery&&v.webContents?.getURL().startsWith('https://discord.com')); return views.every(v=>v.webContents.session===views[0].webContents.session);}); assert.equal(sessions,true);
   fs.mkdirSync(path.join(ROOT,'test-results'),{recursive:true});
   await page.screenshot({path:path.join(ROOT,'test-results','shell-six-pane.png')});
   if(process.env.WAYLAND_DISPLAY && process.env.HYPRLAND_INSTANCE_SIGNATURE) {
@@ -99,7 +99,7 @@ test('real top-level HTTP redirect requests confirmation and never opens a brows
   await page.evaluate(url=>window.omadisc.dispatch({type:'assign',index:0,url,label:''}),channel(0));
   await eventually(()=>nativeViews(app),v=>v.length===1,'first test webview');
   await app.evaluate(async({BrowserWindow})=>{
-    const view=BrowserWindow.getAllWindows()[0].contentView.children.find(v=>v.webContents?.getURL().startsWith('https://discord.com'));
+    const view=BrowserWindow.getAllWindows()[0].contentView.children.find(v=>!v.directoryDiscovery&&v.webContents?.getURL().startsWith('https://discord.com'));
     await view.webContents.loadURL('https://discord.com/redirect-fixture').catch(()=>{});
   });
   const result=await eventually(()=>app.evaluate(()=>globalThis.redirectTest),v=>v.prompts.length===1,'external redirect confirmation');
@@ -262,7 +262,7 @@ test('Omarchy channel design fills the pane, preserves editing and restores Disc
   const fixture=fs.readFileSync(path.join(__dirname,'../fixtures/channel.html'),'utf8');
   const {app,page}=await launch(dir,{route:route=>{
     const url=route.request().url();
-    const browser=`<!doctype html><title>LOCAL CHANNEL BROWSER FIXTURE</title><main aria-label="All channels"><a data-list-item-id="channels___234567890123456780" href="${channel(0)}">kzn</a><a data-list-item-id="channels___234567890123456782" href="${channel(2)}">team-lounge</a><a data-list-item-id="channels___234567890123456784" href="${channel(4)}">planning</a><a data-list-item-id="channels___234567890123456785" href="${channel(5)}">archive</a><div role="button" data-channel-id="234567890123456786" aria-label="voice-room">voice-room</div></main>`;
+    const browser=`<!doctype html><title>LOCAL CHANNEL BROWSER FIXTURE</title><main id="all-channels" aria-label="All channels"><a data-list-item-id="channels___234567890123456780" href="${channel(0)}">kzn</a><a data-list-item-id="channels___234567890123456782" href="${channel(2)}">team-lounge</a><a data-list-item-id="channels___234567890123456784" href="${channel(4)}">planning</a><a data-list-item-id="channels___234567890123456785" href="${channel(5)}">archive</a></main><script>setTimeout(()=>{const row=document.createElement('div');row.setAttribute('role','button');row.dataset.channelId='234567890123456786';row.setAttribute('aria-label','voice-room');row.textContent='voice-room';document.querySelector('#all-channels').append(row)},350)</script>`;
     const body=url.endsWith('/login')?'<title>LOCAL LOGIN FIXTURE</title><nav class="sidebar__fixture">Login navigation</nav><input aria-label="Fixture password" type="password">':url.endsWith('/channel-browser')?browser:fixture.replaceAll('__CURRENT_CHANNEL__',url).replaceAll('__NEXT_CHANNEL__',channel(2)).replaceAll('__PLANNING_CHANNEL__',channel(4)).replaceAll('__ARCHIVE_CHANNEL__',channel(5));
     return route.fulfill({contentType:'text/html',body});
   }});
