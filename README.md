@@ -42,7 +42,7 @@ Requires Linux, Node >=22.12, npm, a C compiler (`cc`), normal Electron desktop 
     npm run build
     npm run install:local
 
-The standalone bundle is in `dist/omadisc-0.5.2-linux-<architecture>/`. The build uses the architecture of the machine on which npm installed Electron; ARM64 and x86_64 must be built/tested separately. Local install creates `~/.local/share/omadisc/releases/`, a `current` symlink, `~/.local/bin/omadisc`, and a desktop entry/icon. An existing same-version release is intentionally not overwritten. Close the app before replacing/removing an installed release.
+The standalone bundle is in `dist/omadisc-0.5.3-linux-<architecture>/`. The build uses the architecture of the machine on which npm installed Electron; ARM64 and x86_64 must be built/tested separately. Local install creates `~/.local/share/omadisc/releases/`, a `current` symlink, `~/.local/bin/omadisc`, and a desktop entry/icon. An existing same-version release is intentionally not overwritten. Close the app before replacing/removing an installed release.
 
 ## Data and security
 
