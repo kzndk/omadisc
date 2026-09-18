@@ -9,7 +9,7 @@ A multi-pane Discord web workspace for **Omarchy / Linux**. Choose **1, 2, 4 or 
 ## Use
 
 Launch **OmaDisc** from your application launcher or run `omadisc`.
-1. Open **Settings (⚙) → Discord account → Sign in to Discord**. Complete sign-in in the single Discord window that opens. All channel panes reuse that saved session, including after restarting OmaDisc. Waiting channels reconnect automatically. Existing OmaDisc logins are reused; QR login, passwords and two-factor verification stay on Discord’s page. If you close the sign-in window, return to Settings whenever you are ready.
+1. Open **Settings (⚙) → Discord account → Sign in with password or QR**. Complete sign-in in the single full-width Discord window that opens: enter your password, or scan Discord's QR code with the Discord mobile app and approve the login there. All channel panes reuse that saved session, including after restarting OmaDisc. Waiting channels reconnect automatically. Existing OmaDisc logins are reused, and two-factor verification stays on Discord’s page. If you close the sign-in window, return to Settings whenever you are ready.
 2. Choose 1 / 2 / 4 / 6 in the toolbar.
 3. Click **+** in a pane header. Paste the full Discord channel link, or **Browse Discord** and select a channel inside Discord. Give it an optional label.
 4. The toolbar channel menu follows the active pane. In a server channel it combines the sidebar with Discord's channel browser to list every accessible channel from that server, including channels outside your opted-in sidebar, collapsed categories, off-screen rows and linkless voice/stage rows. Choose one to open it in the same pane. **Focus pane** temporarily expands a chat and **Back to grid** restores your layout.

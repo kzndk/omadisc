@@ -30,9 +30,14 @@ async function createWorkspace(file) {
   function openAccount() {
     if(accountWindow) { accountWindow.show();accountWindow.focus();return; }
     signIn.begin();accountError='';accountLoading=true;
-    const login=new BrowserWindow({parent:win,width:1000,height:780,minWidth:760,minHeight:600,title:'Discord sign-in · OmaDisc',backgroundColor:theme().vars.bg,autoHideMenuBar:true,webPreferences:{...REMOTE_PREFERENCES,session:discord}});
+    // Discord presents password and QR sign-in side by side at its desktop
+    // breakpoint. Keep this window wide enough for both choices, even when the
+    // workspace itself uses a compact page scale.
+    const login=new BrowserWindow({parent:win,width:1100,height:780,minWidth:900,minHeight:620,title:'Discord sign-in · Password or QR · OmaDisc',backgroundColor:theme().vars.bg,autoHideMenuBar:true,webPreferences:{...REMOTE_PREFERENCES,session:discord}});
     accountWindow=login;
-    const wc=login.webContents;secureRemote(wc,login);
+    const wc=login.webContents;
+    wc.setZoomMode('isolated');wc.setZoomFactor(0.9);
+    secureRemote(wc,login);
     let completing=false;
     async function navigated(url) {
       if(completing||closed||accountWindow!==login)return;
@@ -49,6 +54,10 @@ async function createWorkspace(file) {
     wc.on('did-navigate',(_event,url)=>void navigated(url));
     wc.on('did-navigate-in-page',(_event,url,main)=>{if(main)void navigated(url);});
     wc.on('did-start-loading',()=>{accountLoading=true;publish();});
+    // Navigation initializes the document's zoom. Reapply the isolated factor
+    // after each Discord redirect so compact workspace zoom cannot hide the QR
+    // choice and this account window cannot resize the channel panes.
+    wc.on('did-finish-load',()=>wc.setZoomFactor(0.9));
     wc.on('did-stop-loading',()=>{accountLoading=false;publish();});
     function failed(message) { if(completing)return;accountError=message;login.destroy(); }
     wc.on('did-fail-load',(_event,code,_description,_url,main)=>{if(main&&code!==-3)failed(`Discord sign-in could not load (${code}). Check your connection and try again.`);});

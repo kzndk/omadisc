@@ -135,23 +135,25 @@ test('Settings sign-in shares persistent browser storage across panes and preser
   assert.equal(waiting.state.panes[1].url,channel(1));assert.equal(waiting.statuses[2].waiting,true);
   assert.equal(requests.some(r=>r.url===channel(2)),false,'deferred pane must not load before sign-in');
   await page.locator('[data-pane="1"]').getByRole('button',{name:'Sign in in Settings'}).click();
-  await page.getByRole('button',{name:'Sign in to Discord',exact:true}).click();
+  await page.getByRole('button',{name:'Sign in with password or QR',exact:true}).click();
   await eventually(()=>state(page),s=>s.account.open,'central account window opens');
   const accountDetails=()=>app.evaluate(({BrowserWindow})=>{
     const main=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('omadisc://'));
     const accounts=BrowserWindow.getAllWindows().filter(w=>w!==main);
     const login=accounts[0];const peer=main.contentView.children.find(v=>v.webContents);
-    return {count:accounts.length,id:login?.id,shared:login?.webContents.session===peer?.webContents.session,prefs:login?.webContents.getLastWebPreferences()};
+    return {count:accounts.length,id:login?.id,shared:login?.webContents.session===peer?.webContents.session,prefs:login?.webContents.getLastWebPreferences(),bounds:login?.getContentBounds(),zoom:login?.webContents.getZoomFactor(),zoomMode:login?.webContents.getZoomMode(),title:login?.getTitle()};
   });
-  const details=await eventually(accountDetails,s=>s.count===1,'only one account window');
+  const details=await eventually(accountDetails,s=>s.count===1&&s.bounds?.width>=900&&s.zoom===0.9,'one full-width account window');
   assert.equal(details.shared,true);
+  assert.ok(details.bounds.width>=900,'Discord desktop login keeps room for its QR panel');
+  assert.equal(details.zoom,0.9);assert.equal(details.zoomMode,'isolated');assert.match(details.title,/Password or QR/);
   for(const [key,value] of Object.entries({sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true}))assert.equal(details.prefs[key],value);
   assert.ok(!details.prefs.preload);
   await page.getByRole('button',{name:'Return to sign-in'}).click();
   assert.equal((await accountDetails()).id,details.id,'repeated clicks focus the existing window');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('https://discord.com/')).close());
   await eventually(()=>state(page),s=>!s.account.open&&s.account.status==='required','cancel retains waiting chats');
-  await page.getByRole('button',{name:'Sign in to Discord',exact:true}).click();
+  await page.getByRole('button',{name:'Sign in with password or QR',exact:true}).click();
   const login=await eventually(async()=>app.context().pages().find(p=>p.url()==='https://discord.com/login'),p=>!!p,'account login fixture');
   assert.deepEqual(await login.evaluate(()=>({node:typeof require,bridge:typeof window.omadisc})),{node:'undefined',bridge:'undefined'});
   await login.getByRole('button',{name:'Connect fixture account'}).click();
@@ -177,7 +179,7 @@ test('Settings sign-in shares persistent browser storage across panes and preser
   await page.getByRole('button',{name:'Settings',exact:true}).click();
   // Fixture-only preview: no user messages, sign-in QR or account details.
   await page.screenshot({path:path.join(ROOT,'test-results','settings-sign-in-preview.png')});
-  await page.getByRole('button',{name:'Sign in to Discord',exact:true}).click();
+  await page.getByRole('button',{name:'Sign in with password or QR',exact:true}).click();
   const relogin=await eventually(async()=>app.context().pages().find(p=>p.url()==='https://discord.com/login'),p=>!!p,'fixture reauthentication');
   await relogin.getByRole('button',{name:'Connect fixture account'}).click();
   await eventually(()=>state(page),s=>s.account.status==='connected'&&!s.account.open,'reconnected after expiry');
@@ -188,7 +190,7 @@ test('Settings sign-in shares persistent browser storage across panes and preser
   fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify(initial));
   launched=await launch(dir,{route});app=launched.app;page=launched.page;
   await page.getByRole('button',{name:'Settings',exact:true}).click();
-  await page.getByRole('button',{name:'Sign in to Discord',exact:true}).click();
+  await page.getByRole('button',{name:'Sign in with password or QR',exact:true}).click();
   await eventually(()=>state(page),s=>s.account.status==='connected'&&!s.account.open,'saved login reconnects after full restart without another sign-in');
   await page.getByRole('button',{name:'Done',exact:true}).click();
   await assign(1);
@@ -204,11 +206,11 @@ test('account sign-in failure can be retried and its window closes with the work
   const {app,page}=await launch(dir,{route:route=>fail?route.abort('internetdisconnected'):route.fulfill({contentType:'text/html',body:'<title>LOCAL ACCOUNT FIXTURE</title><p>Fixture sign-in</p>'})});
   t.after(async()=>{await app.close().catch(()=>{});fs.rmSync(dir,{recursive:true,force:true});});
   await page.getByRole('button',{name:'Settings',exact:true}).click();
-  await page.getByRole('button',{name:'Sign in to Discord',exact:true}).click();
+  await page.getByRole('button',{name:'Sign in with password or QR',exact:true}).click();
   await eventually(()=>state(page),s=>!!s.account.error&&!s.account.open,'failed account window closes with retry message');
   assert.match(await page.locator('#account-error').textContent(),/Check your connection/);
   fail=false;
-  await page.getByRole('button',{name:'Sign in to Discord',exact:true}).click();
+  await page.getByRole('button',{name:'Sign in with password or QR',exact:true}).click();
   await eventually(()=>state(page),s=>s.account.open&&!s.account.error&&!s.account.loading,'account retry opens cleanly');
   const exited=new Promise(resolve=>app.process().once('exit',resolve));
   await page.close();

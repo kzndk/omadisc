@@ -36,7 +36,7 @@ const launchEnv = process.env.OMADISC_TEST_EXE ? { ...process.env, ELECTRON_RUN_
     app.process().stderr.on('data', chunk => { const text=chunk.toString(); if(text.includes('OmaDisc pane')||text.includes('GPU process'))console.error(text); });
     await page.waitForFunction(() => !!window.omadisc);
     await page.getByRole('button',{name:'Settings',exact:true}).click();
-    await page.getByRole('button',{name:'Sign in to Discord',exact:true}).click();
+    await page.getByRole('button',{name:'Sign in with password or QR',exact:true}).click();
     const deadline = Date.now() + 60000;
     let live;
     do {
@@ -44,13 +44,13 @@ const launchEnv = process.env.OMADISC_TEST_EXE ? { ...process.env, ELECTRON_RUN_
         const win = BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('https://discord.com/'));
         if (!win) return { loaded: false };
         const wc = win.webContents;
-        const page = await Promise.race([wc.executeJavaScript('({ login: !!document.querySelector("input[type=password]"), title: document.title, ready: document.readyState })').catch(() => ({ ready: 'loading' })),new Promise(resolve=>setTimeout(()=>resolve({ready:'unresponsive'}),1500))]);
-        return { loaded: true, origin: new URL(wc.getURL()).origin, pathname: new URL(wc.getURL()).pathname, title: page.title, ready: page.ready, login: page.login, sandboxDisabled: app.commandLine.hasSwitch('no-sandbox'), sandbox: wc.getLastWebPreferences().sandbox, nodeIntegration: wc.getLastWebPreferences().nodeIntegration, contextIsolation: wc.getLastWebPreferences().contextIsolation, remotePreload: !!wc.getLastWebPreferences().preload, size: win.getContentSize(), platform: app.commandLine.getSwitchValue('ozone-platform'), runtime: process.versions.electron };
+        const page = await Promise.race([wc.executeJavaScript(`(()=>{const text=document.body?.innerText||'';return {login:!!document.querySelector('input[type=password]'),qr:!!document.querySelector('[class*="qrCode"],img[alt*="QR" i]')||/\\bQR(?:\\s+Code)?\\b/i.test(text),title:document.title,ready:document.readyState}})()`).catch(() => ({ ready: 'loading' })),new Promise(resolve=>setTimeout(()=>resolve({ready:'unresponsive'}),1500))]);
+        return { loaded: true, origin: new URL(wc.getURL()).origin, pathname: new URL(wc.getURL()).pathname, title: page.title, ready: page.ready, login: page.login, qr: page.qr, sandboxDisabled: app.commandLine.hasSwitch('no-sandbox'), sandbox: wc.getLastWebPreferences().sandbox, nodeIntegration: wc.getLastWebPreferences().nodeIntegration, contextIsolation: wc.getLastWebPreferences().contextIsolation, remotePreload: !!wc.getLastWebPreferences().preload, size: win.getContentSize(), zoom: wc.getZoomFactor(), zoomMode: wc.getZoomMode(), platform: app.commandLine.getSwitchValue('ozone-platform'), runtime: process.versions.electron };
       });
-      if (live.login && live.ready === 'complete') break;
+      if (live.login && live.qr && live.ready === 'complete') break;
       await new Promise(r => setTimeout(r, 250));
     } while (Date.now() < deadline);
-    assert.equal(live.origin, 'https://discord.com'); assert.equal(live.login, true, 'Actual Discord login form must load'); assert.equal(live.sandboxDisabled, false); assert.equal(live.sandbox, true); assert.equal(live.nodeIntegration, false);
+    assert.equal(live.origin, 'https://discord.com'); assert.equal(live.login, true, 'Actual Discord login form must load'); assert.equal(live.qr, true, 'Actual Discord QR sign-in choice must be visible'); assert.ok(live.size[0]>=900);assert.equal(live.zoom,0.9);assert.equal(live.zoomMode,'isolated');assert.equal(live.sandboxDisabled, false); assert.equal(live.sandbox, true); assert.equal(live.nodeIntegration, false);
     console.log('Discord login loaded; checking 30-second video/render stability.');
     phase='settings-account-window';
     await new Promise(resolve=>setTimeout(resolve,30000));

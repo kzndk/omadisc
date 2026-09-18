@@ -51,7 +51,7 @@ function render(data) {
   $('#settings').dataset.attention=String(account.status==='required');
   $('#account-status').textContent=account.open?'Finish signing in on Discord':account.status==='connected'?'Discord connected':account.status==='required'?'Sign-in needed':'One account for every pane';
   $('#account-copy').textContent=account.open?'Your Discord sign-in window is open. Waiting chats reconnect when you finish.':account.status==='connected'?'Every chat uses this saved sign-in, including new panes and your next OmaDisc session.':'Sign in here once. All chat windows use the same saved session, including after restarting OmaDisc.';
-  $('#account-sign-in').textContent=account.open?'Return to sign-in':account.status==='connected'?'Check saved sign-in':'Sign in to Discord';
+  $('#account-sign-in').textContent=account.open?'Return to sign-in':account.status==='connected'?'Check saved sign-in':'Sign in with password or QR';
   $('#account-error').textContent=account.error;
   $('#notice').textContent = data.notice;
   const visible = new Map(rects.map(r => [r.index, r]));
