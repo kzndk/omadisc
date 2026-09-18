@@ -76,4 +76,6 @@ E2E needs a desktop display (X11/XWayland for the Playwright harness). It launch
 
 Close OmaDisc, then remove its launcher, desktop entry, icon and `~/.local/share/omadisc` installation. Keep `~/.config/omadisc` to preserve login/settings, or remove it separately if you intend to erase the dedicated browser profile. Never point removal at another browser's profile.
 
+Electron and Chromium retain their own licenses, distributed alongside the packaged runtime.
+
 Not affiliated with, endorsed by, or sponsored by Discord. Discord is a trademark of its owner.
