@@ -1,7 +1,7 @@
 {
   "name": "omadisc",
   "productName": "OmaDisc",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A multi-pane Discord web workspace for Omarchy",
   "private": true,
   "main": "src/main.cjs",

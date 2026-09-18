@@ -29,3 +29,5 @@ Version 0.4.1 fixes channel-only panes for Discord's nested content subgrid, pre
 Version 0.5.0 adds a top toolbar menu for the active pane's Discord server. A fixed read-only DOM query collects the server name and rendered channel links, while the main process validates every returned URL and label before exposing it to the local shell. Choosing a channel opens it in the active pane without using tokens, Discord stores or private APIs.
 
 Version 0.5.1 completes that directory by scanning the full channel sidebar, including virtualized rows and collapsed categories. Discovery temporarily exposes navigation inside a hidden native view, expands and scrolls the list, then restores its category and scroll state before showing the pane again.
+
+Version 0.5.2 adds channels omitted from a member's opted-in sidebar. When Discord exposes its official channel-browser route, OmaDisc loads that route in a temporary off-screen sandboxed view, merges its directory with the sidebar and closes the view. Linkless rows carrying channel IDs cover voice and stage channels without touching Discord's stores or authentication token.
