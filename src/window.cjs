@@ -5,7 +5,7 @@ const { channelURL, reduceState, layoutRects, paneIndex, HOME } = require('./mod
 const { REMOTE_PREFERENCES, secureSession, secureRemote } = require('./security.cjs');
 const { watchTheme, resolveTheme, discordCSS } = require('./theme.cjs');
 const { SignIn, isSignInURL } = require('./sign-in.cjs');
-const { guildFromURL, normalizeChannelDirectory, DISCOVERY_SCRIPT } = require('./channel-directory.cjs');
+const { guildFromURL, normalizeChannelDirectory, channelBrowserURL, DISCOVERY_SCRIPT } = require('./channel-directory.cjs');
 const SHELL = 'omadisc://app/index.html';
 async function createWorkspace(file) {
   let state = readState(file), focus = null, overlay = false, active = 0, notice = '', closed = false;
@@ -94,6 +94,25 @@ async function createWorkspace(file) {
     catch { notice='Could not save the latest channel. Check available disk space and permissions.'; }
     publish();
   }
+  async function scanChannelBrowser(url,i,revision) {
+    if(!url||closed)return null;
+    const browser=new WebContentsView({webPreferences:{...REMOTE_PREFERENCES,session:discord,backgroundThrottling:false}}),wc=browser.webContents;
+    win.contentView.addChildView(browser);browser.setBounds({x:-2000,y:-2000,width:1000,height:800});browser.setVisible(true);secureRemote(wc,win);
+    try {
+      await wc.loadURL(url);
+      for(const delay of [150,400,900]) {
+        await new Promise(resolve=>setTimeout(resolve,delay));
+        if(closed||directoryRevisions.get(i)!==revision||wc.isDestroyed())return null;
+        const raw=await wc.executeJavaScript(DISCOVERY_SCRIPT);
+        if(raw?.channels?.length)return raw;
+      }
+    } catch { return null; }
+    finally {
+      try {if(!closed)win.contentView.removeChildView(browser);}catch{}
+      if(!wc.isDestroyed())wc.close();
+    }
+    return null;
+  }
   function refreshDirectory(i) {
     const view=views.get(i), revision=(directoryRevisions.get(i)||0)+1;directoryRevisions.set(i,revision);
     if(!view||view.webContents.isDestroyed()||!guildFromURL(view.webContents.getURL())) {if(view)view.directoryScan=false;directories.delete(i);syncGeometry();publish();return;}
@@ -104,6 +123,9 @@ async function createWorkspace(file) {
       try {
         raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);
         if(scanNavigation&&raw?.channels?.length){view.directoryScanRevision=revision;view.directoryScan=true;syncGeometry();await view.applyTheme?.();raw=await view.webContents.executeJavaScript(DISCOVERY_SCRIPT);}
+        if(directoryRevisions.get(i)!==revision||view.webContents.isDestroyed())return;
+        const browserURL=channelBrowserURL(view.webContents.getURL(),raw),browserRaw=await scanChannelBrowser(browserURL,i,revision);
+        if(browserRaw)raw={guild:raw.guild,server:raw.server||browserRaw.server,channels:[...raw.channels,...browserRaw.channels]};
         if(directoryRevisions.get(i)!==revision||view.webContents.isDestroyed())return;
         const value=normalizeChannelDirectory(view.webContents.getURL(),raw);
         if(value.channels.length||number===2) {directories.set(i,{...value,loading:false});publish();return;}
